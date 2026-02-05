@@ -1,0 +1,6 @@
+streamlit
+openai
+rembg
+pillow
+requests
+onnxruntime
