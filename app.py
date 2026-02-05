@@ -19,7 +19,7 @@ GUMROAD_PRODUCT_URL = "https://michaelicious1.gumroad.com/l/obrbuof"
 MASTER_KEY = "ADMIN" 
 
 # --- INICIALIZACE ---
-st.set_page_config(page_title="MINT AI", page_icon="💎", layout="centered")
+st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered")
 
 try:
     from openai import OpenAI
@@ -136,7 +136,7 @@ st.markdown("""
 # ==========================================
 TRANS = {
     "CZ": {
-        "title": "MINT AI", "sub": "Tvůj prodejní expert", 
+        "title": "INZO AI", "sub": "Tvůj prodejní expert", 
         "step0": "Co prodáváme?", "back": "Zpět",
         "cats": ["Oblečení", "Elektronika", "Auto-Moto", "Nábytek"],
         "tab_cam": "📷 Vyfotit", "tab_upl": "📂 Nahrát", "upl_label": "Vyber soubor",
@@ -161,7 +161,7 @@ TRANS = {
         "conds_furn": ["Jako nové", "Používané", "Poškozené"]
     },
     "EN": {
-        "title": "MINT AI", "sub": "Global Sales Expert", 
+        "title": "INZO AI", "sub": "Global Sales Expert", 
         "step0": "What are we selling?", "back": "Back",
         "cats": ["Clothes", "Electronics", "Cars", "Furniture"],
         "tab_cam": "📷 Camera", "tab_upl": "📂 Upload", "upl_label": "Choose file",
@@ -186,7 +186,7 @@ TRANS = {
         "conds_furn": ["Like new", "Used", "Damaged"]
     },
     "DE": {
-        "title": "MINT AI", "sub": "Verkaufsexperte", 
+        "title": "INZO AI", "sub": "Verkaufsexperte", 
         "step0": "Was verkaufen wir?", "back": "Zurück",
         "cats": ["Kleidung", "Elektronik", "Auto", "Möbel"],
         "tab_cam": "📷 Kamera", "tab_upl": "📂 Datei", "upl_label": "Datei wählen",
@@ -211,7 +211,7 @@ TRANS = {
         "conds_furn": ["Wie neu", "Gebraucht", "Beschädigt"]
     },
     "PL": {
-        "title": "MINT AI", "sub": "Ekspert sprzedaży", 
+        "title": "INZO AI", "sub": "Ekspert sprzedaży", 
         "step0": "Co sprzedajemy?", "back": "Wróć",
         "cats": ["Ubrania", "Elektronika", "Samochody", "Meble"],
         "tab_cam": "📷 Aparat", "tab_upl": "📂 Plik", "upl_label": "Wybierz plik",
