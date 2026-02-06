@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import requests
+import os
 from PIL import Image
 from rembg import remove
 
@@ -11,16 +12,20 @@ from rembg import remove
 # 1. KONFIGURACE A SETUP
 # ==========================================
 
-# 🔑 SEM VLOŽ SVŮJ OPENAI KLÍČ:
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-# 🛒 GUMROAD KONFIGURACE
+st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered")
+
+# Bezpečné načtení API klíče
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except:
+    OPENAI_API_KEY = "SEM_VLOZ_TVUJ_OPENAI_API_KLIC"
+
+# GUMROAD
 GUMROAD_PERMALINK = "obrbuof"
 GUMROAD_PRODUCT_URL = "https://michaelicious1.gumroad.com/l/obrbuof"
 MASTER_KEY = "ADMIN" 
 
-# --- INICIALIZACE ---
-st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered")
-
+# Kontrola knihovny OpenAI
 try:
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -29,7 +34,7 @@ except ImportError:
     st.stop()
 
 # ==========================================
-# 2. DESIGN (SMART CONTRAST + FIXED UI)
+# 2. DESIGN (SMART CONTRAST + CSS)
 # ==========================================
 st.markdown("""
 <style>
@@ -47,7 +52,20 @@ st.markdown("""
         text-shadow: 0px 1px 2px rgba(0,0,0,0.6);
     }
     
-    /* 3. SIDEBAR */
+    /* 3. SKRYTÍ PRVKŮ STREAMLIT */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* 4. HLAVNÍ PODLOŽKA (TO, CO CHYBĚLO!) */
+    .block-container {
+        background-color: rgba(0,0,0,0.5); /* Tmavá průhledná deska */
+        padding: 2rem;
+        border-radius: 15px;
+        backdrop-filter: blur(5px);
+    }
+
+    /* 5. SIDEBAR */
     [data-testid="stSidebar"] {
         background-color: #1e1e1e !important;
         border-right: 1px solid rgba(255,255,255,0.1);
@@ -56,7 +74,7 @@ st.markdown("""
         color: white !important; text-shadow: none !important;
     }
     
-    /* 4. INPUTY (Bílé pozadí + ČERNÝ text) */
+    /* 6. INPUTY (Bílé pozadí + ČERNÝ text) */
     .stTextInput > div > div > input, 
     .stSelectbox > div > div > div, 
     .stTextArea > div > div > textarea, 
@@ -68,13 +86,11 @@ st.markdown("""
         border-radius: 8px !important;
         font-weight: 500 !important;
     }
-    /* Černý text v multiselectu */
-    span[data-baseweb="tag"] span {
-        color: black !important;
-    }
+    span[data-baseweb="tag"] span { color: black !important; }
     .stSelectbox svg { fill: black !important; }
+    div[data-baseweb="select"] > div { color: black !important; }
     
-    /* 5. FILE UPLOADER FIX */
+    /* 7. FILE UPLOADER FIX */
     [data-testid="stFileUploader"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 15px; border-radius: 12px;
@@ -86,7 +102,7 @@ st.markdown("""
         color: black !important; border-color: black !important;
     }
 
-    /* 6. TLAČÍTKA */
+    /* 8. TLAČÍTKA */
     div.stButton > button {
         background-color: rgba(255,255,255,0.2) !important;
         color: white !important;
@@ -104,13 +120,7 @@ st.markdown("""
         color: white !important;
     }
     
-    /* 7. SKLENĚNÉ KONTEJNERY */
-    .block-container {
-        background-color: rgba(0,0,0,0.4);
-        padding: 2rem; border-radius: 15px;
-    }
-    
-    /* TLAČÍTKO KOUPIT (Speciální styl) */
+    /* 9. TLAČÍTKO KOUPIT */
     a[href*="gumroad"] {
         display: inline-block;
         background-color: #ff4b4b;
@@ -151,7 +161,7 @@ TRANS = {
             "dims": "Rozměry"
         },
         "style": ["Prodejní expert", "Stručný", "Technický"],
-        "buy_btn": "⭐ KOUPIT KLÍČ (cca 60 Kč)",
+        "buy_btn": "⭐ KOUPIT KLÍČ ($1.60)", 
         "limit_msg": "⛔ Došly pokusy zdarma! Pro pokračování si kupte klíč.",
         "acc_opts": ["Krabice", "Nabíječka", "Kabel", "Obal/Kryt", "Sluchátka", "Záruční list"],
         "types_elec": ["Mobil/Tablet", "Počítač/Notebook", "TV/Monitor", "Jiné"],
@@ -176,7 +186,7 @@ TRANS = {
             "dims": "Dimensions"
         },
         "style": ["Sales Expert", "Short", "Technical"],
-        "buy_btn": "⭐ BUY KEY ($2.50)",
+        "buy_btn": "⭐ BUY KEY ($1.60)", 
         "limit_msg": "⛔ Free trials ended! Buy a key to continue.",
         "acc_opts": ["Box", "Charger", "Cable", "Case", "Headphones", "Warranty"],
         "types_elec": ["Mobile/Tablet", "PC/Laptop", "TV/Monitor", "Other"],
@@ -201,7 +211,7 @@ TRANS = {
             "dims": "Maße"
         },
         "style": ["Verkaufsexperte", "Kurz", "Technisch"],
-        "buy_btn": "⭐ SCHLÜSSEL KAUFEN (2,50€)",
+        "buy_btn": "⭐ SCHLÜSSEL KAUFEN ($1.60)",
         "limit_msg": "⛔ Testphase beendet! Kaufen Sie einen Schlüssel.",
         "acc_opts": ["OVP", "Ladegerät", "Kabel", "Hülle", "Kopfhörer", "Garantie"],
         "types_elec": ["Handy/Tablet", "PC/Laptop", "TV/Monitor", "Andere"],
@@ -226,7 +236,7 @@ TRANS = {
             "dims": "Wymiary"
         },
         "style": ["Ekspert sprzedaży", "Krótki", "Techniczny"],
-        "buy_btn": "⭐ KUP KLUCZ (10 zł)",
+        "buy_btn": "⭐ KUP KLUCZ ($1.60)",
         "limit_msg": "⛔ Koniec wersji próbnej! Kup klucz.",
         "acc_opts": ["Pudełko", "Ładowarka", "Kabel", "Etui", "Słuchawki", "Gwarancja"],
         "types_elec": ["Telefon/Tablet", "Komputer/Laptop", "TV/Monitor", "Inne"],
@@ -238,7 +248,7 @@ TRANS = {
 }
 
 # ==========================================
-# 4. LOGIKA BACKENDU
+# 4. BACKEND LOGIKA
 # ==========================================
 
 # Session State
@@ -246,6 +256,7 @@ if 'trials' not in st.session_state: st.session_state.trials = 3
 if 'premium' not in st.session_state: st.session_state.premium = False
 if 'lang' not in st.session_state: st.session_state.lang = "CZ"
 if 'step' not in st.session_state: st.session_state.step = 0
+if 'cat' not in st.session_state: st.session_state.cat = ""
 if 'ai_data' not in st.session_state: st.session_state.ai_data = {}
 
 tx = TRANS[st.session_state.lang]
@@ -263,6 +274,7 @@ def encode_image(image):
     image.save(buffered, format="JPEG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
+# --- ZDE JE TA HLAVNÍ OPRAVA PRO ČEŠTINU ---
 def analyze_image_with_gpt(image, cat, lang):
     b64 = encode_image(image)
     instr = ""
@@ -270,7 +282,8 @@ def analyze_image_with_gpt(image, cat, lang):
     elif cat == tx['cats'][1]: instr = "Find: Type, Brand, Model, Condition details."
     elif cat == tx['cats'][2]: instr = "Find: Brand, Model, Body type, Year, Fuel."
     
-    prompt = f"Role: Sales Expert. Language: {lang}. Category: {cat}. Task: {instr}. Output JSON: {{'name': '...', 'price_estimate': '...', 'details': {{'Key': 'Value'}}}}"
+    # Tady přikazujeme, ať to píše v tom jazyce, který je vybraný
+    prompt = f"Role: Sales Expert. Language: {lang}. Category: {cat}. Task: {instr}. IMPORTANT: Describe everything in {lang} language only. Translate specific terms like T-shirt to {lang}. Output JSON: {{'name': '...', 'price_estimate': '...', 'details': {{'Key': 'Value'}}}}"
     
     try:
         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]}])
@@ -307,24 +320,28 @@ def generate_ad_with_gpt(data, lang, platform, style, user_inputs):
 # 5. UI APLIKACE (FRONTEND)
 # ==========================================
 
-# --- JAZYKOVÁ LIŠTA (TLAČÍTKA) ---
+# --- JAZYKOVÁ LIŠTA ---
 cols = st.columns(4)
-if cols[0].button("🇨🇿 Česky"): st.session_state.lang = "CZ"; st.rerun()
-if cols[1].button("🇬🇧 English"): st.session_state.lang = "EN"; st.rerun()
-if cols[2].button("🇩🇪 Deutsch"): st.session_state.lang = "DE"; st.rerun()
-if cols[3].button("🇵🇱 Polski"): st.session_state.lang = "PL"; st.rerun()
+if cols[0].button("🇨🇿 Česky"): 
+    st.session_state.lang = "CZ"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
+if cols[1].button("🇬🇧 English"): 
+    st.session_state.lang = "EN"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
+if cols[2].button("🇩🇪 Deutsch"): 
+    st.session_state.lang = "DE"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
+if cols[3].button("🇵🇱 Polski"): 
+    st.session_state.lang = "PL"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
 
 st.title(f"💎 {tx['title']}")
 st.markdown(f"*{tx['sub']}*")
 
-# --- SIDEBAR (LOGIN) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("Můj účet" if st.session_state.lang == "CZ" else "My Account")
     if st.session_state.premium:
         st.success("PREMIUM ✅")
     else:
         st.warning(f"Free: {st.session_state.trials}")
-        st.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL) # Tlačítko v sidebaru
+        st.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL)
         k = st.text_input("Key / Klíč", type="password")
         if st.button("Activate / Aktivovat"):
             if verify_license(k): st.session_state.premium = True; st.rerun()
@@ -342,7 +359,7 @@ if st.session_state.step == 0:
 
 # --- KROK 1: UPLOAD ---
 elif st.session_state.step == 1:
-    if st.button(tx['back']): st.session_state.step = 0; st.rerun()
+    if st.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
     st.info(f"{st.session_state.cat}")
     
     plat = st.selectbox("Marketplace", tx['platforms'])
@@ -375,7 +392,7 @@ elif st.session_state.step == 1:
 
 # --- KROK 2: FORMULÁŘ ---
 elif st.session_state.step == 2:
-    if st.button(tx['back']): st.session_state.step = 0; st.rerun()
+    if st.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
     data = st.session_state.ai_data
     cat = st.session_state.cat
     
@@ -412,23 +429,18 @@ elif st.session_state.step == 2:
         user_inputs['Cut'] = c3.text_input(lbl['cut'])
         user_inputs['Des'] = c4.text_input(lbl['des'])
 
-    # 2. ELEKTRONIKA (OPRAVENO PC)
+    # 2. ELEKTRONIKA
     elif cat == tx['cats'][1]:
-        # Výběr typu (lokalizované)
         type_idx = st.radio(lbl['type'], range(len(tx['types_elec'])), format_func=lambda x: tx['types_elec'][x], horizontal=True)
         sel_type = tx['types_elec'][type_idx]
         user_inputs['Type'] = sel_type
-        
         user_inputs['Model'] = st.text_input(lbl['model'], value=data.get('name', ''))
         
-        # Pokud je to MOBIL
-        if type_idx == 0: 
+        if type_idx == 0: # Mobil
             c1, c2 = st.columns(2)
             user_inputs['Storage'] = c1.text_input(lbl['store'])
             user_inputs['Batt'] = c2.text_input(lbl['bat'])
-            
-        # Pokud je to PC/LAPTOP
-        elif type_idx == 1:
+        elif type_idx == 1: # PC
             c1, c2 = st.columns(2)
             user_inputs['CPU'] = c1.text_input(lbl['cpu'])
             user_inputs['RAM'] = c2.text_input(lbl['ram'])
@@ -462,11 +474,11 @@ elif st.session_state.step == 2:
     user_inputs.update({'Name': name, 'Price': price, 'Cond': cond, 'Defects': defs})
     style = st.selectbox("Styl", tx['style'])
     
-    # GENERACE + BLOKACE
+    # GENERACE
     if st.button(tx['gen'], type="primary"):
         if not st.session_state.premium and st.session_state.trials <= 0:
-            st.error(tx['limit_msg']) # Hláška v jazyce uživatele
-            st.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL) # Tlačítko pod chybou
+            st.error(tx['limit_msg']) 
+            st.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL)
             st.stop()
             
         if not st.session_state.premium: st.session_state.trials -= 1
@@ -484,8 +496,5 @@ elif st.session_state.step == 3:
     st.text_area("Result:", value=st.session_state.final_text, height=450)
     
     c1, c2 = st.columns(2)
-    if c1.button(tx['back']): st.session_state.step = 0; st.rerun()
-    
-    # Tlačítko KOUPIT je v kroku 3 vždy viditelné pro ne-premium
-    if not st.session_state.premium: 
-        c2.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL)
+    if c1.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
+    if not st.session_state.premium: c2.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL)
