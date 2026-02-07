@@ -34,7 +34,7 @@ except ImportError:
     st.stop()
 
 # ==========================================
-# 2. DESIGN (SMART CONTRAST + CSS)
+# 2. DESIGN (ULTRA STEALTH MODE - BEZ LIŠT)
 # ==========================================
 st.markdown("""
 <style>
@@ -52,12 +52,34 @@ st.markdown("""
         text-shadow: 0px 1px 2px rgba(0,0,0,0.6);
     }
     
-    /* 3. SKRYTÍ PRVKŮ STREAMLIT */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* --- 3. ULTRA STEALTH MODE (Tady mažeme to zakroužkované) --- */
     
-    /* 4. HLAVNÍ PODLOŽKA (TO, CO CHYBĚLO!) */
+    /* Skryje horní menu (tři čárky) */
+    #MainMenu {visibility: hidden; display: none;}
+    
+    /* Skryje patičku 'Made with Streamlit' */
+    footer {visibility: hidden; display: none;}
+    
+    /* Skryje horní barevný proužek */
+    header {visibility: hidden; display: none;}
+    
+    /* !!! TOTO MAŽE TO ZAKROUŽKOVANÉ DOLE !!! */
+    /* Maže Toolbar, Korunku, Profilovku, Status widget */
+    [data-testid="stToolbar"], 
+    [data-testid="stDecoration"], 
+    [data-testid="stStatusWidget"],
+    .stApp > header {
+        visibility: hidden !important;
+        display: none !important;
+        height: 0px !important;
+        width: 0px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    
+    /* ------------------------------------------------ */
+    
+    /* 4. HLAVNÍ PODLOŽKA */
     .block-container {
         background-color: rgba(0,0,0,0.5); /* Tmavá průhledná deska */
         padding: 2rem;
