@@ -12,7 +12,8 @@ from rembg import remove
 # 1. KONFIGURACE A SETUP
 # ==========================================
 
-st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered")
+# Tady nastavujeme, aby se schovalo menu už při startu
+st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered", initial_sidebar_state="collapsed")
 
 # Bezpečné načtení API klíče
 try:
@@ -34,7 +35,7 @@ except ImportError:
     st.stop()
 
 # ==========================================
-# 2. DESIGN (ULTRA STEALTH MODE - BEZ LIŠT)
+# 2. DESIGN (GHOST MODE - MAŽEME JMENO I POČÍTADLA)
 # ==========================================
 st.markdown("""
 <style>
@@ -52,37 +53,50 @@ st.markdown("""
         text-shadow: 0px 1px 2px rgba(0,0,0,0.6);
     }
     
-    /* --- 3. ULTRA STEALTH MODE (Tady mažeme to zakroužkované) --- */
+    /* --- 3. GHOST MODE (TOTÁLNÍ SKRYTÍ IDENTITY) --- */
     
-    /* Skryje horní menu (tři čárky) */
+    /* Skryje Menu (tři tečky vpravo nahoře - tam je tvoje jméno!) */
     #MainMenu {visibility: hidden; display: none;}
     
-    /* Skryje patičku 'Made with Streamlit' */
+    /* Skryje patičku (Made with Streamlit) */
     footer {visibility: hidden; display: none;}
     
-    /* Skryje horní barevný proužek */
+    /* Skryje horní barevnou lištu (Header) */
     header {visibility: hidden; display: none;}
     
-    /* !!! TOTO MAŽE TO ZAKROUŽKOVANÉ DOLE !!! */
-    /* Maže Toolbar, Korunku, Profilovku, Status widget */
-    [data-testid="stToolbar"], 
-    [data-testid="stDecoration"], 
-    [data-testid="stStatusWidget"],
-    .stApp > header {
+    /* Skryje celou horní lištu aplikace */
+    [data-testid="stHeader"] {
         visibility: hidden !important;
         display: none !important;
-        height: 0px !important;
-        width: 0px !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
+        background-color: transparent !important;
+    }
+
+    /* Skryje Toolbar (kde je View counter a tvoje fotka pro tebe) */
+    [data-testid="stToolbar"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    
+    /* Skryje Status Widget (běžící panáček) */
+    [data-testid="stStatusWidget"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Pro jistotu skryjeme i avatary, kdyby se někde objevily */
+    [data-testid="stUserAvatar"] {
+        display: none !important;
     }
     
     /* ------------------------------------------------ */
     
     /* 4. HLAVNÍ PODLOŽKA */
     .block-container {
-        background-color: rgba(0,0,0,0.5); /* Tmavá průhledná deska */
-        padding: 2rem;
+        background-color: rgba(0,0,0,0.5); 
+        padding-top: 2rem !important; /* Posuneme obsah nahoru, když zmizela lišta */
+        padding-bottom: 2rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
         border-radius: 15px;
         backdrop-filter: blur(5px);
     }
@@ -96,7 +110,7 @@ st.markdown("""
         color: white !important; text-shadow: none !important;
     }
     
-    /* 6. INPUTY (Bílé pozadí + ČERNÝ text) */
+    /* 6. INPUTY */
     .stTextInput > div > div > input, 
     .stSelectbox > div > div > div, 
     .stTextArea > div > div > textarea, 
@@ -112,7 +126,7 @@ st.markdown("""
     .stSelectbox svg { fill: black !important; }
     div[data-baseweb="select"] > div { color: black !important; }
     
-    /* 7. FILE UPLOADER FIX */
+    /* 7. UPLOADER */
     [data-testid="stFileUploader"] {
         background-color: rgba(255, 255, 255, 0.95);
         padding: 15px; border-radius: 12px;
@@ -142,7 +156,7 @@ st.markdown("""
         color: white !important;
     }
     
-    /* 9. TLAČÍTKO KOUPIT */
+    /* 9. GUMROAD */
     a[href*="gumroad"] {
         display: inline-block;
         background-color: #ff4b4b;
