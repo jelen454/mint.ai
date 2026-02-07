@@ -12,8 +12,8 @@ from rembg import remove
 # 1. KONFIGURACE A SETUP
 # ==========================================
 
-# Nastavíme, aby se menu schovalo hned při startu
-st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered", initial_sidebar_state="collapsed")
+# ZMĚNA: initial_sidebar_state="expanded" -> Panel bude při startu OTEVŘENÝ
+st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered", initial_sidebar_state="expanded")
 
 # Bezpečné načtení API klíče
 try:
@@ -35,7 +35,7 @@ except ImportError:
     st.stop()
 
 # ==========================================
-# 2. DESIGN (JADERNÁ VARIANTA - SKRYTÍ VŠEHO)
+# 2. DESIGN (SIDEBAR ZPĚT + SKRYTÍ BRANDINGU)
 # ==========================================
 st.markdown("""
 <style>
@@ -53,69 +53,46 @@ st.markdown("""
         text-shadow: 0px 1px 2px rgba(0,0,0,0.6);
     }
     
-    /* --- 3. AGRESIVNÍ SKRYTÍ HLAVIČKY A LIŠT --- */
+    /* --- 3. SELEKTIVNÍ SKRYTÍ (Branding pryč, Sidebar zůstává) --- */
     
-    /* Skryje celé horní menu (kde je 'Created by' a 'View App') */
-    header {
-        visibility: hidden !important;
-        height: 0px !important;
-        position: fixed !important;
-        top: -100px !important;
-        z-index: -1 !important;
-    }
-    
-    /* Specificky pro Streamlit Cloud header */
-    [data-testid="stHeader"] {
-        visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
-    }
-
-    /* Skryje Toolbar (kde je View counter a tvoje fotka) */
-    [data-testid="stToolbar"] {
-        visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
-    }
-    
-    /* Skryje Menu (tři tečky vpravo nahoře) */
-    #MainMenu {
-        visibility: hidden !important;
-        display: none !important;
-    }
+    /* Skryje Menu vpravo nahoře (tři tečky -> tam je Created by) */
+    #MainMenu {visibility: hidden;}
+    [data-testid="stMainMenu"] {visibility: hidden;}
     
     /* Skryje patičku (Made with Streamlit) */
-    footer {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Skryje Status Widget (běžící panáček) */
-    [data-testid="stStatusWidget"] {
-        visibility: hidden !important;
-        display: none !important;
+    footer {visibility: hidden;}
+    
+    /* Skryje Toolbar (kde je View counter a tvoje fotka pro tebe) */
+    [data-testid="stToolbar"] {visibility: hidden;}
+    [data-testid="stDecoration"] {visibility: hidden;}
+    [data-testid="stStatusWidget"] {visibility: hidden;}
+    
+    /* Ale HLAVIČKU necháme (jen ji zprůhledníme), aby fungovalo tlačítko pro Sidebar vlevo */
+    header {
+        background: transparent !important;
     }
     
     /* ------------------------------------------------ */
     
-    /* 4. HLAVNÍ PODLOŽKA (Posuneme ji nahoru, aby nebyla díra po menu) */
+    /* 4. HLAVNÍ PODLOŽKA */
     .block-container {
         background-color: rgba(0,0,0,0.5); 
-        padding-top: 1rem !important; 
-        padding-bottom: 2rem;
-        padding-left: 2rem;
-        padding-right: 2rem;
+        padding-top: 2rem; 
         border-radius: 15px;
         backdrop-filter: blur(5px);
     }
 
-    /* 5. SIDEBAR */
+    /* 5. SIDEBAR (Vzhled panelu) */
     [data-testid="stSidebar"] {
         background-color: #1e1e1e !important;
         border-right: 1px solid rgba(255,255,255,0.1);
     }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] p {
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
         color: white !important; text-shadow: none !important;
+    }
+    /* Tlačítko křížku pro zavření panelu na mobilu */
+    button[kind="header"] {
+        color: white !important;
     }
     
     /* 6. INPUTY */
@@ -318,7 +295,6 @@ def encode_image(image):
     image.save(buffered, format="JPEG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
-# --- ZDE JE TA HLAVNÍ OPRAVA PRO ČEŠTINU ---
 def analyze_image_with_gpt(image, cat, lang):
     b64 = encode_image(image)
     instr = ""
@@ -326,7 +302,6 @@ def analyze_image_with_gpt(image, cat, lang):
     elif cat == tx['cats'][1]: instr = "Find: Type, Brand, Model, Condition details."
     elif cat == tx['cats'][2]: instr = "Find: Brand, Model, Body type, Year, Fuel."
     
-    # Tady přikazujeme, ať to píše v tom jazyce, který je vybraný
     prompt = f"Role: Sales Expert. Language: {lang}. Category: {cat}. Task: {instr}. IMPORTANT: Describe everything in {lang} language only. Translate specific terms like T-shirt to {lang}. Output JSON: {{'name': '...', 'price_estimate': '...', 'details': {{'Key': 'Value'}}}}"
     
     try:
@@ -378,7 +353,7 @@ if cols[3].button("🇵🇱 Polski"):
 st.title(f"💎 {tx['title']}")
 st.markdown(f"*{tx['sub']}*")
 
-# --- SIDEBAR ---
+# --- SIDEBAR (Zpět a funkční!) ---
 with st.sidebar:
     st.header("Můj účet" if st.session_state.lang == "CZ" else "My Account")
     if st.session_state.premium:
