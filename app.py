@@ -12,7 +12,7 @@ from rembg import remove
 # 1. KONFIGURACE A SETUP
 # ==========================================
 
-# Tady nastavujeme, aby se schovalo menu už při startu
+# Nastavíme, aby se menu schovalo hned při startu
 st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered", initial_sidebar_state="collapsed")
 
 # Bezpečné načtení API klíče
@@ -35,7 +35,7 @@ except ImportError:
     st.stop()
 
 # ==========================================
-# 2. DESIGN (GHOST MODE - MAŽEME JMENO I POČÍTADLA)
+# 2. DESIGN (JADERNÁ VARIANTA - SKRYTÍ VŠEHO)
 # ==========================================
 st.markdown("""
 <style>
@@ -53,47 +53,55 @@ st.markdown("""
         text-shadow: 0px 1px 2px rgba(0,0,0,0.6);
     }
     
-    /* --- 3. GHOST MODE (TOTÁLNÍ SKRYTÍ IDENTITY) --- */
+    /* --- 3. AGRESIVNÍ SKRYTÍ HLAVIČKY A LIŠT --- */
     
-    /* Skryje Menu (tři tečky vpravo nahoře - tam je tvoje jméno!) */
-    #MainMenu {visibility: hidden; display: none;}
+    /* Skryje celé horní menu (kde je 'Created by' a 'View App') */
+    header {
+        visibility: hidden !important;
+        height: 0px !important;
+        position: fixed !important;
+        top: -100px !important;
+        z-index: -1 !important;
+    }
     
-    /* Skryje patičku (Made with Streamlit) */
-    footer {visibility: hidden; display: none;}
-    
-    /* Skryje horní barevnou lištu (Header) */
-    header {visibility: hidden; display: none;}
-    
-    /* Skryje celou horní lištu aplikace */
+    /* Specificky pro Streamlit Cloud header */
     [data-testid="stHeader"] {
         visibility: hidden !important;
         display: none !important;
-        background-color: transparent !important;
+        height: 0px !important;
     }
 
-    /* Skryje Toolbar (kde je View counter a tvoje fotka pro tebe) */
+    /* Skryje Toolbar (kde je View counter a tvoje fotka) */
     [data-testid="stToolbar"] {
+        visibility: hidden !important;
+        display: none !important;
+        height: 0px !important;
+    }
+    
+    /* Skryje Menu (tři tečky vpravo nahoře) */
+    #MainMenu {
         visibility: hidden !important;
         display: none !important;
     }
     
+    /* Skryje patičku (Made with Streamlit) */
+    footer {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
     /* Skryje Status Widget (běžící panáček) */
     [data-testid="stStatusWidget"] {
         visibility: hidden !important;
         display: none !important;
     }
-
-    /* Pro jistotu skryjeme i avatary, kdyby se někde objevily */
-    [data-testid="stUserAvatar"] {
-        display: none !important;
-    }
     
     /* ------------------------------------------------ */
     
-    /* 4. HLAVNÍ PODLOŽKA */
+    /* 4. HLAVNÍ PODLOŽKA (Posuneme ji nahoru, aby nebyla díra po menu) */
     .block-container {
         background-color: rgba(0,0,0,0.5); 
-        padding-top: 2rem !important; /* Posuneme obsah nahoru, když zmizela lišta */
+        padding-top: 1rem !important; 
         padding-bottom: 2rem;
         padding-left: 2rem;
         padding-right: 2rem;
