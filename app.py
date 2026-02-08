@@ -4,16 +4,22 @@ import base64
 import io
 import json
 import requests
+import sqlite3
 import os
 from PIL import Image
-from rembg import remove
+
+# Zkusíme importovat rembg, pokud není, nevadí
+try:
+    from rembg import remove
+    HAS_REMBG = True
+except ImportError:
+    HAS_REMBG = False
 
 # ==========================================
-# 1. KONFIGURACE A SETUP
+# 1. KONFIGURACE A DATABÁZE
 # ==========================================
 
-# ZMĚNA: initial_sidebar_state="expanded" -> Panel bude při startu OTEVŘENÝ
-st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered", initial_sidebar_state="expanded")
+st.set_page_config(page_title="INZO AI", page_icon="💎", layout="centered", initial_sidebar_state="collapsed")
 
 # Bezpečné načtení API klíče
 try:
@@ -26,7 +32,49 @@ GUMROAD_PERMALINK = "obrbuof"
 GUMROAD_PRODUCT_URL = "https://michaelicious1.gumroad.com/l/obrbuof"
 MASTER_KEY = "ADMIN" 
 
-# Kontrola knihovny OpenAI
+# --- DATABÁZE UŽIVATELŮ (SQLite) ---
+def init_db():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users 
+                 (email TEXT PRIMARY KEY, trials INTEGER, premium INTEGER)''')
+    conn.commit()
+    conn.close()
+
+def get_user(email):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE email=?", (email,))
+    user = c.fetchone()
+    conn.close()
+    return user
+
+def create_user(email):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    # Nový uživatel má 3 pokusy a není premium (0)
+    c.execute("INSERT INTO users VALUES (?, 3, 0)", (email,))
+    conn.commit()
+    conn.close()
+
+def update_trials(email, new_trials):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET trials=? WHERE email=?", (new_trials, email))
+    conn.commit()
+    conn.close()
+
+def set_premium(email):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET premium=1 WHERE email=?", (email,))
+    conn.commit()
+    conn.close()
+
+# Inicializace DB při startu
+init_db()
+
+# Kontrola OpenAI
 try:
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -35,7 +83,7 @@ except ImportError:
     st.stop()
 
 # ==========================================
-# 2. DESIGN (SIDEBAR ZPĚT + SKRYTÍ BRANDINGU)
+# 2. DESIGN (GHOST MODE + CUSTOM MENU)
 # ==========================================
 st.markdown("""
 <style>
@@ -53,49 +101,26 @@ st.markdown("""
         text-shadow: 0px 1px 2px rgba(0,0,0,0.6);
     }
     
-    /* --- 3. SELEKTIVNÍ SKRYTÍ (Branding pryč, Sidebar zůstává) --- */
-    
-    /* Skryje Menu vpravo nahoře (tři tečky -> tam je Created by) */
-    #MainMenu {visibility: hidden;}
-    [data-testid="stMainMenu"] {visibility: hidden;}
-    
-    /* Skryje patičku (Made with Streamlit) */
-    footer {visibility: hidden;}
-    
-    /* Skryje Toolbar (kde je View counter a tvoje fotka pro tebe) */
-    [data-testid="stToolbar"] {visibility: hidden;}
-    [data-testid="stDecoration"] {visibility: hidden;}
-    [data-testid="stStatusWidget"] {visibility: hidden;}
-    
-    /* Ale HLAVIČKU necháme (jen ji zprůhledníme), aby fungovalo tlačítko pro Sidebar vlevo */
-    header {
-        background: transparent !important;
-    }
-    
-    /* ------------------------------------------------ */
+    /* 3. SKRYTÍ VŠECH LIŠT (ABY TO BYLO PROFI) */
+    header {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
+    [data-testid="stToolbar"] {visibility: hidden !important;}
+    [data-testid="stHeader"] {visibility: hidden !important;}
+    [data-testid="stDecoration"] {visibility: hidden !important;}
+    [data-testid="stStatusWidget"] {visibility: hidden !important;}
+    #MainMenu {visibility: hidden !important;}
     
     /* 4. HLAVNÍ PODLOŽKA */
     .block-container {
-        background-color: rgba(0,0,0,0.5); 
+        background-color: rgba(0,0,0,0.6); 
         padding-top: 2rem; 
+        padding-bottom: 2rem;
         border-radius: 15px;
-        backdrop-filter: blur(5px);
+        backdrop-filter: blur(10px);
+        margin-top: 20px;
     }
 
-    /* 5. SIDEBAR (Vzhled panelu) */
-    [data-testid="stSidebar"] {
-        background-color: #1e1e1e !important;
-        border-right: 1px solid rgba(255,255,255,0.1);
-    }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
-        color: white !important; text-shadow: none !important;
-    }
-    /* Tlačítko křížku pro zavření panelu na mobilu */
-    button[kind="header"] {
-        color: white !important;
-    }
-    
-    /* 6. INPUTY */
+    /* 5. INPUTY */
     .stTextInput > div > div > input, 
     .stSelectbox > div > div > div, 
     .stTextArea > div > div > textarea, 
@@ -107,57 +132,18 @@ st.markdown("""
         border-radius: 8px !important;
         font-weight: 500 !important;
     }
-    span[data-baseweb="tag"] span { color: black !important; }
-    .stSelectbox svg { fill: black !important; }
-    div[data-baseweb="select"] > div { color: black !important; }
-    
-    /* 7. UPLOADER */
-    [data-testid="stFileUploader"] {
-        background-color: rgba(255, 255, 255, 0.95);
-        padding: 15px; border-radius: 12px;
-    }
-    [data-testid="stFileUploader"] div, [data-testid="stFileUploader"] span, [data-testid="stFileUploader"] small {
-        color: black !important; text-shadow: none !important;
-    }
-    [data-testid="stFileUploader"] button {
-        color: black !important; border-color: black !important;
-    }
 
-    /* 8. TLAČÍTKA */
+    /* 6. TLAČÍTKA */
     div.stButton > button {
         background-color: rgba(255,255,255,0.2) !important;
         color: white !important;
         border: 1px solid rgba(255,255,255,0.6) !important;
         font-weight: bold !important;
     }
-    div.stButton > button:hover {
-        background-color: white !important;
-        color: black !important;
-        transform: scale(1.02);
-    }
     button[kind="primary"] {
         background: linear-gradient(90deg, #ff00cc, #333399) !important;
         border: none !important;
         color: white !important;
-    }
-    
-    /* 9. GUMROAD */
-    a[href*="gumroad"] {
-        display: inline-block;
-        background-color: #ff4b4b;
-        color: white !important;
-        padding: 10px 20px;
-        border-radius: 8px;
-        text-decoration: none;
-        font-weight: bold;
-        text-align: center;
-        width: 100%;
-        margin-top: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    }
-    a[href*="gumroad"]:hover {
-        background-color: #ff0000;
-        transform: scale(1.02);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -189,7 +175,8 @@ TRANS = {
         "conds_cloth": ["Nový s visačkou", "Velmi dobrý", "Dobrý", "S vadou"],
         "conds_elec": ["Nové / Nerozbalené", "Použité - Jako nové", "Běžně opotřebené", "Na díly"],
         "conds_car": ["Ojeté", "Předváděcí / Nové", "Bourané", "Na díly"],
-        "conds_furn": ["Jako nové", "Používané", "Poškozené"]
+        "conds_furn": ["Jako nové", "Používané", "Poškozené"],
+        "login_t": "Přihlášení", "email_l": "Zadej svůj email", "start": "Spustit aplikaci", "menu": "Můj účet", "buy": "Koupit neomezeně", "rem": "Zbývá pokusů:", "prem": "PREMIUM AKTIVNÍ 💎", "key_l": "Mám klíč"
     },
     "EN": {
         "title": "INZO AI", "sub": "Global Sales Expert", 
@@ -214,73 +201,23 @@ TRANS = {
         "conds_cloth": ["New with tags", "Very good", "Good", "With flaws"],
         "conds_elec": ["New / Sealed", "Used - Like New", "Used", "For parts"],
         "conds_car": ["Used", "New / Demo", "Damaged", "For parts"],
-        "conds_furn": ["Like new", "Used", "Damaged"]
-    },
-    "DE": {
-        "title": "INZO AI", "sub": "Verkaufsexperte", 
-        "step0": "Was verkaufen wir?", "back": "Zurück",
-        "cats": ["Kleidung", "Elektronik", "Auto", "Möbel"],
-        "tab_cam": "📷 Kamera", "tab_upl": "📂 Datei", "upl_label": "Datei wählen",
-        "bg": "Hintergrund entfernen", "an": "🔍 Analysieren", "gen": "🚀 Erstellen",
-        "platforms": ["Kleinanzeigen", "Vinted.de", "eBay.de", "Facebook Marketplace"],
-        "lbls": {
-            "name": "Titel", "price": "Preis", "cond": "Zustand", "def": "Mängel", "loc": "📍 Ort / Kontakt",
-            "brand": "Marke", "size": "Größe", "mat": "Material", "col": "Farbe", "cut": "Schnitt", "des": "Design",
-            "type": "Typ", "model": "Modell", "store": "Speicher", "bat": "Batterie", "acc": "Zubehör",
-            "cpu": "Prozessor (CPU)", "ram": "RAM", "gpu": "Grafikkarte (GPU)",
-            "body": "Karosserie", "year": "Jahr", "km": "Km", "engine": "Motor / Kraftstoff",
-            "dims": "Maße"
-        },
-        "style": ["Verkaufsexperte", "Kurz", "Technisch"],
-        "buy_btn": "⭐ SCHLÜSSEL KAUFEN ($1.60)",
-        "limit_msg": "⛔ Testphase beendet! Kaufen Sie einen Schlüssel.",
-        "acc_opts": ["OVP", "Ladegerät", "Kabel", "Hülle", "Kopfhörer", "Garantie"],
-        "types_elec": ["Handy/Tablet", "PC/Laptop", "TV/Monitor", "Andere"],
-        "conds_cloth": ["Neu mit Etikett", "Sehr gut", "Gut", "Mängel"],
-        "conds_elec": ["Neu / OVP", "Gebraucht - Wie neu", "Gebraucht", "Defekt"],
-        "conds_car": ["Gebraucht", "Neu / Vorführwagen", "Unfallwagen", "Ersatzteile"],
-        "conds_furn": ["Wie neu", "Gebraucht", "Beschädigt"]
-    },
-    "PL": {
-        "title": "INZO AI", "sub": "Ekspert sprzedaży", 
-        "step0": "Co sprzedajemy?", "back": "Wróć",
-        "cats": ["Ubrania", "Elektronika", "Samochody", "Meble"],
-        "tab_cam": "📷 Aparat", "tab_upl": "📂 Plik", "upl_label": "Wybierz plik",
-        "bg": "Usuń tło", "an": "🔍 Analizuj", "gen": "🚀 Generuj",
-        "platforms": ["OLX.pl", "Vinted.pl", "Allegro Lokalnie", "Facebook"],
-        "lbls": {
-            "name": "Tytuł", "price": "Cena", "cond": "Stan", "def": "Wady", "loc": "📍 Lokalizacja / Kontakt",
-            "brand": "Marka", "size": "Rozmiar", "mat": "Materiał", "col": "Kolor", "cut": "Krój", "des": "Design",
-            "type": "Typ", "model": "Model", "store": "Pamięć", "bat": "Bateria", "acc": "Akcesoria",
-            "cpu": "Procesor (CPU)", "ram": "RAM", "gpu": "Karta graficzna",
-            "body": "Nadwozie", "year": "Rok", "km": "Przebieg", "engine": "Silnik / Paliwo",
-            "dims": "Wymiary"
-        },
-        "style": ["Ekspert sprzedaży", "Krótki", "Techniczny"],
-        "buy_btn": "⭐ KUP KLUCZ ($1.60)",
-        "limit_msg": "⛔ Koniec wersji próbnej! Kup klucz.",
-        "acc_opts": ["Pudełko", "Ładowarka", "Kabel", "Etui", "Słuchawki", "Gwarancja"],
-        "types_elec": ["Telefon/Tablet", "Komputer/Laptop", "TV/Monitor", "Inne"],
-        "conds_cloth": ["Nowy z metką", "Bardzo dobry", "Dobry", "Z wadami"],
-        "conds_elec": ["Nowy / Zapakowany", "Używany - Jak nowy", "Używany", "Uszkodzony"],
-        "conds_car": ["Używany", "Nowy / Demo", "Uszkodzony", "Na części"],
-        "conds_furn": ["Jak nowy", "Używany", "Uszkodzony"]
+        "conds_furn": ["Like new", "Used", "Damaged"],
+        "login_t": "Login", "email_l": "Enter your email", "start": "Start App", "menu": "My Account", "buy": "Buy Unlimited", "rem": "Trials left:", "prem": "PREMIUM ACTIVE 💎", "key_l": "I have a key"
     }
 }
 
-# ==========================================
-# 4. BACKEND LOGIKA
-# ==========================================
-
-# Session State
-if 'trials' not in st.session_state: st.session_state.trials = 3
-if 'premium' not in st.session_state: st.session_state.premium = False
+# Session state init
+if 'user_email' not in st.session_state: st.session_state.user_email = None
 if 'lang' not in st.session_state: st.session_state.lang = "CZ"
 if 'step' not in st.session_state: st.session_state.step = 0
 if 'cat' not in st.session_state: st.session_state.cat = ""
 if 'ai_data' not in st.session_state: st.session_state.ai_data = {}
 
-tx = TRANS[st.session_state.lang]
+tx = TRANS[st.session_state.lang] if st.session_state.lang in TRANS else TRANS["CZ"]
+
+# ==========================================
+# 4. FUNKCE BACKENDU (VŠECHNO PŮVODNÍ ZDE)
+# ==========================================
 
 def verify_license(key):
     if key == MASTER_KEY: return True
@@ -335,185 +272,244 @@ def generate_ad_with_gpt(data, lang, platform, style, user_inputs):
         return res.choices[0].message.content
     except: return "Error generating text."
 
-# ==========================================
-# 5. UI APLIKACE (FRONTEND)
-# ==========================================
-
-# --- JAZYKOVÁ LIŠTA ---
-cols = st.columns(4)
-if cols[0].button("🇨🇿 Česky"): 
-    st.session_state.lang = "CZ"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
-if cols[1].button("🇬🇧 English"): 
-    st.session_state.lang = "EN"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
-if cols[2].button("🇩🇪 Deutsch"): 
-    st.session_state.lang = "DE"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
-if cols[3].button("🇵🇱 Polski"): 
-    st.session_state.lang = "PL"; st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
-
-st.title(f"💎 {tx['title']}")
-st.markdown(f"*{tx['sub']}*")
-
-# --- SIDEBAR (Zpět a funkční!) ---
-with st.sidebar:
-    st.header("Můj účet" if st.session_state.lang == "CZ" else "My Account")
-    if st.session_state.premium:
-        st.success("PREMIUM ✅")
+# --- UI: DIALOGOVÉ OKNO ÚČTU ---
+@st.dialog("👤 Můj účet / My Account")
+def account_dialog():
+    email = st.session_state.user_email
+    user = get_user(email)
+    trials = user[1]
+    is_premium = user[2]
+    
+    st.write(f"Email: **{email}**")
+    
+    if is_premium:
+        st.success(tx['prem'])
+        st.balloons()
     else:
-        st.warning(f"Free: {st.session_state.trials}")
-        st.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL)
-        k = st.text_input("Key / Klíč", type="password")
-        if st.button("Activate / Aktivovat"):
-            if verify_license(k): st.session_state.premium = True; st.rerun()
-            else: st.error("❌")
-
-# --- KROK 0: KATEGORIE ---
-if st.session_state.step == 0:
-    st.subheader(tx['step0'])
-    c1, c2 = st.columns(2)
-    if c1.button(f"👕 {tx['cats'][0]}"): st.session_state.cat = tx['cats'][0]; st.session_state.step = 1; st.rerun()
-    if c2.button(f"📱 {tx['cats'][1]}"): st.session_state.cat = tx['cats'][1]; st.session_state.step = 1; st.rerun()
-    c3, c4 = st.columns(2)
-    if c3.button(f"🚗 {tx['cats'][2]}"): st.session_state.cat = tx['cats'][2]; st.session_state.step = 1; st.rerun()
-    if c4.button(f"🪑 {tx['cats'][3]}"): st.session_state.cat = tx['cats'][3]; st.session_state.step = 1; st.rerun()
-
-# --- KROK 1: UPLOAD ---
-elif st.session_state.step == 1:
-    if st.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
-    st.info(f"{st.session_state.cat}")
-    
-    plat = st.selectbox("Marketplace", tx['platforms'])
-    
-    tab1, tab2 = st.tabs([tx['tab_cam'], tx['tab_upl']])
-    img_file = None
-    with tab1:
-        cam = st.camera_input("Foto")
-        if cam: img_file = cam
-    with tab2:
-        upl = st.file_uploader(tx['upl_label'], type=['jpg','png','jpeg'])
-        if upl: img_file = upl
+        st.info(f"{tx['rem']} **{trials}**")
+        st.progress(trials / 3)
         
-    try: from rembg import remove; has_rembg = True
-    except: has_rembg = False
+        st.markdown("---")
+        st.write("🚀 **Chceš neomezené generování?**")
+        st.link_button(f"⭐ {tx['buy']} ($1.60)", GUMROAD_PRODUCT_URL)
+        
+        st.markdown("---")
+        k = st.text_input("🔑 " + tx['key_l'], type="password")
+        if st.button("Aktivovat / Activate"):
+            if verify_license(k):
+                set_premium(email)
+                st.success("Aktivováno! / Activated!")
+                st.rerun()
+            else:
+                st.error("Neplatný klíč / Invalid key")
+
+# ==========================================
+# 5. HLAVNÍ LOGIKA (LOGIN GATE)
+# ==========================================
+
+# A) POKUD NENÍ PŘIHLÁŠEN -> UKAŽ JEN LOGIN
+if st.session_state.user_email is None:
+    st.title("💎 INZO AI")
+    st.subheader(tx['login_t'])
     
-    rem_bg = st.toggle(tx['bg'], value=True) if has_rembg else False
+    # Jazyky na login obrazovce
+    lc1, lc2, lc3, lc4 = st.columns(4)
+    if lc1.button("🇨🇿"): st.session_state.lang = "CZ"; st.rerun()
+    if lc2.button("🇬🇧"): st.session_state.lang = "EN"; st.rerun()
+    if lc3.button("🇩🇪"): st.session_state.lang = "DE"; st.rerun()
+    if lc4.button("🇵🇱"): st.session_state.lang = "PL"; st.rerun()
     
-    if img_file:
-        if st.button(tx['an'], type="primary"):
-            if "SEM_VLOZ" in OPENAI_API_KEY: st.error("Error: API Key missing."); st.stop()
-            with st.spinner("..."):
-                img = Image.open(img_file)
-                if rem_bg and has_rembg: img = remove(img)
-                st.session_state.final_img = img
-                st.session_state.ai_data = analyze_image_with_gpt(img, st.session_state.cat, st.session_state.lang)
-                st.session_state.ai_data['platform'] = plat
-                st.session_state.step = 2
+    with st.form("login_form"):
+        email_input = st.text_input(tx['email_l'], placeholder="name@example.com").strip().lower()
+        submit = st.form_submit_button(tx['start'], type="primary")
+        
+        if submit and email_input:
+            if "@" not in email_input:
+                st.error("Zadej platný email.")
+            else:
+                # Zkontrolovat nebo vytvořit uživatele v DB
+                if not get_user(email_input):
+                    create_user(email_input)
+                
+                st.session_state.user_email = email_input
                 st.rerun()
 
-# --- KROK 2: FORMULÁŘ ---
-elif st.session_state.step == 2:
-    if st.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
-    data = st.session_state.ai_data
-    cat = st.session_state.cat
-    
-    c1, c2 = st.columns([1, 2])
-    c1.image(st.session_state.final_img, use_container_width=True)
-    
-    lbl = tx['lbls']
-    with c2:
-        name = st.text_input(lbl['name'], value=data.get('name', ''))
-        price = st.text_input(lbl['price'], value=data.get('price_estimate', ''))
-        
-        cond_list = ["New", "Used"]
-        if cat == tx['cats'][0]: cond_list = tx['conds_cloth']
-        elif cat == tx['cats'][1]: cond_list = tx['conds_elec']
-        elif cat == tx['cats'][2]: cond_list = tx['conds_car']
-        elif cat == tx['cats'][3]: cond_list = tx['conds_furn']
-        
-        cond = st.selectbox(lbl['cond'], cond_list)
-        is_new = any(x in cond.lower() for x in ["nový", "new", "neu", "nowy", "nerozbalené"])
-        defs = ""
-        if not is_new: defs = st.text_input(lbl['def'])
+# B) POKUD JE PŘIHLÁŠEN -> UKAŽ CELOU APLIKACI
+else:
+    # --- HORNÍ LIŠTA (HEADER) ---
+    c_logo, c_menu = st.columns([3, 1])
+    with c_logo:
+        st.title(f"💎 {tx['title']}")
+    with c_menu:
+        # Tlačítko MENU - Vypadá jako 3 tečky nebo profil
+        if st.button("👤 " + tx['menu']):
+            account_dialog()
 
-    st.markdown("---")
-    user_inputs = {}
-    det = data.get('details', {})
+    # Načtení dat uživatele
+    user = get_user(st.session_state.user_email)
+    trials_left = user[1]
+    is_premium = user[2]
+
+    # --- PŮVODNÍ APLIKACE (KROK 0-3) ---
     
-    # 1. OBLEČENÍ
-    if cat == tx['cats'][0]:
+    # --- JAZYKOVÁ LIŠTA (UVNITŘ) ---
+    cols = st.columns(4)
+    if cols[0].button("🇨🇿 Česky", key="l1"): st.session_state.lang = "CZ"; st.rerun()
+    if cols[1].button("🇬🇧 English", key="l2"): st.session_state.lang = "EN"; st.rerun()
+    if cols[2].button("🇩🇪 Deutsch", key="l3"): st.session_state.lang = "DE"; st.rerun()
+    if cols[3].button("🇵🇱 Polski", key="l4"): st.session_state.lang = "PL"; st.rerun()
+    
+    st.markdown(f"*{tx['sub']}*")
+
+    # --- KROK 0: KATEGORIE ---
+    if st.session_state.step == 0:
+        st.subheader(tx['step0'])
         c1, c2 = st.columns(2)
-        user_inputs['Brand'] = c1.text_input(lbl['brand'], value=det.get('Značka', det.get('Brand', '')))
-        user_inputs['Size'] = c2.text_input(lbl['size'], value=det.get('Velikost', det.get('Size', '')))
-        user_inputs['Mat'] = st.text_input(lbl['mat'], value=det.get('Materiál', ''))
+        if c1.button(f"👕 {tx['cats'][0]}"): st.session_state.cat = tx['cats'][0]; st.session_state.step = 1; st.rerun()
+        if c2.button(f"📱 {tx['cats'][1]}"): st.session_state.cat = tx['cats'][1]; st.session_state.step = 1; st.rerun()
         c3, c4 = st.columns(2)
-        user_inputs['Cut'] = c3.text_input(lbl['cut'])
-        user_inputs['Des'] = c4.text_input(lbl['des'])
+        if c3.button(f"🚗 {tx['cats'][2]}"): st.session_state.cat = tx['cats'][2]; st.session_state.step = 1; st.rerun()
+        if c4.button(f"🪑 {tx['cats'][3]}"): st.session_state.cat = tx['cats'][3]; st.session_state.step = 1; st.rerun()
 
-    # 2. ELEKTRONIKA
-    elif cat == tx['cats'][1]:
-        type_idx = st.radio(lbl['type'], range(len(tx['types_elec'])), format_func=lambda x: tx['types_elec'][x], horizontal=True)
-        sel_type = tx['types_elec'][type_idx]
-        user_inputs['Type'] = sel_type
-        user_inputs['Model'] = st.text_input(lbl['model'], value=data.get('name', ''))
+    # --- KROK 1: UPLOAD ---
+    elif st.session_state.step == 1:
+        if st.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
+        st.info(f"{st.session_state.cat}")
         
-        if type_idx == 0: # Mobil
-            c1, c2 = st.columns(2)
-            user_inputs['Storage'] = c1.text_input(lbl['store'])
-            user_inputs['Batt'] = c2.text_input(lbl['bat'])
-        elif type_idx == 1: # PC
-            c1, c2 = st.columns(2)
-            user_inputs['CPU'] = c1.text_input(lbl['cpu'])
-            user_inputs['RAM'] = c2.text_input(lbl['ram'])
-            c3, c4 = st.columns(2)
-            user_inputs['GPU'] = c3.text_input(lbl['gpu'])
-            user_inputs['Storage'] = c4.text_input(lbl['store'])
-
-        user_inputs['Accs'] = st.multiselect(lbl['acc'], tx['acc_opts'])
-
-    # 3. AUTO
-    elif cat == tx['cats'][2]:
-        user_inputs['Model'] = st.text_input(lbl['model'], value=data.get('name', ''))
-        c1, c2 = st.columns(2)
-        user_inputs['Year'] = c1.text_input(lbl['year'])
-        user_inputs['Km'] = c2.text_input(lbl['km'])
-        user_inputs['Specs'] = st.text_input(lbl['engine'], placeholder="2.0 TDI, Manual...")
-        user_inputs['Body'] = st.selectbox(lbl['body'], ["Sedan", "Combi", "SUV", "Hatchback", "Cabrio"])
-
-    # 4. NÁBYTEK
-    elif cat == tx['cats'][3]:
-        user_inputs['Dims'] = st.text_input(lbl['dims'])
-        user_inputs['Mat'] = st.text_input(lbl['mat'])
-
-    # KONTAKT
-    plat_name = data.get('platform', '')
-    no_contact = ["Vinted", "Vinted.de", "Vinted.pl", "Depop", "eBay", "eBay.de", "Etsy", "Allegro Lokalnie"]
-    if plat_name not in no_contact:
-        st.markdown("---")
-        user_inputs['Contact'] = st.text_input(lbl['loc'], placeholder="+420...")
-
-    user_inputs.update({'Name': name, 'Price': price, 'Cond': cond, 'Defects': defs})
-    style = st.selectbox("Styl", tx['style'])
-    
-    # GENERACE
-    if st.button(tx['gen'], type="primary"):
-        if not st.session_state.premium and st.session_state.trials <= 0:
-            st.error(tx['limit_msg']) 
-            st.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL)
-            st.stop()
+        plat = st.selectbox("Marketplace", tx['platforms'])
+        
+        tab1, tab2 = st.tabs([tx['tab_cam'], tx['tab_upl']])
+        img_file = None
+        with tab1:
+            cam = st.camera_input("Foto")
+            if cam: img_file = cam
+        with tab2:
+            upl = st.file_uploader(tx['upl_label'], type=['jpg','png','jpeg'])
+            if upl: img_file = upl
             
-        if not st.session_state.premium: st.session_state.trials -= 1
+        rem_bg = st.toggle(tx['bg'], value=True) if HAS_REMBG else False
         
-        with st.spinner("..."):
-            ad = generate_ad_with_gpt(data, st.session_state.lang, plat_name, style, user_inputs)
-            st.session_state.final_text = ad
-            st.session_state.step = 3
-            st.rerun()
+        if img_file:
+            # KONTROLA POKUSŮ PŘED ANALÝZOU
+            if st.button(tx['an'], type="primary"):
+                if not is_premium and trials_left <= 0:
+                     st.error("⛔ " + tx['limit_msg'])
+                     if st.button("Otevřít menu"): account_dialog()
+                else:
+                    if "SEM_VLOZ" in OPENAI_API_KEY: st.error("Error: API Key missing."); st.stop()
+                    with st.spinner("..."):
+                        img = Image.open(img_file)
+                        if rem_bg and HAS_REMBG: img = remove(img)
+                        st.session_state.final_img = img
+                        st.session_state.ai_data = analyze_image_with_gpt(img, st.session_state.cat, st.session_state.lang)
+                        st.session_state.ai_data['platform'] = plat
+                        st.session_state.step = 2
+                        st.rerun()
 
-# --- KROK 3: VÝSLEDEK ---
-elif st.session_state.step == 3:
-    st.balloons()
-    st.success("OK! 🎉")
-    st.text_area("Result:", value=st.session_state.final_text, height=450)
-    
-    c1, c2 = st.columns(2)
-    if c1.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
-    if not st.session_state.premium: c2.link_button(tx['buy_btn'], GUMROAD_PRODUCT_URL)
+    # --- KROK 2: FORMULÁŘ ---
+    elif st.session_state.step == 2:
+        if st.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
+        data = st.session_state.ai_data
+        cat = st.session_state.cat
+        
+        c1, c2 = st.columns([1, 2])
+        c1.image(st.session_state.final_img, use_container_width=True)
+        
+        lbl = tx['lbls']
+        with c2:
+            name = st.text_input(lbl['name'], value=data.get('name', ''))
+            price = st.text_input(lbl['price'], value=data.get('price_estimate', ''))
+            
+            cond_list = ["New", "Used"]
+            if cat == tx['cats'][0]: cond_list = tx['conds_cloth']
+            elif cat == tx['cats'][1]: cond_list = tx['conds_elec']
+            elif cat == tx['cats'][2]: cond_list = tx['conds_car']
+            elif cat == tx['cats'][3]: cond_list = tx['conds_furn']
+            
+            cond = st.selectbox(lbl['cond'], cond_list)
+            is_new = any(x in cond.lower() for x in ["nový", "new", "neu", "nowy", "nerozbalené"])
+            defs = ""
+            if not is_new: defs = st.text_input(lbl['def'])
+
+        st.markdown("---")
+        user_inputs = {}
+        det = data.get('details', {})
+        
+        # 1. OBLEČENÍ
+        if cat == tx['cats'][0]:
+            c1, c2 = st.columns(2)
+            user_inputs['Brand'] = c1.text_input(lbl['brand'], value=det.get('Značka', det.get('Brand', '')))
+            user_inputs['Size'] = c2.text_input(lbl['size'], value=det.get('Velikost', det.get('Size', '')))
+            user_inputs['Mat'] = st.text_input(lbl['mat'], value=det.get('Materiál', ''))
+            c3, c4 = st.columns(2)
+            user_inputs['Cut'] = c3.text_input(lbl['cut'])
+            user_inputs['Des'] = c4.text_input(lbl['des'])
+
+        # 2. ELEKTRONIKA
+        elif cat == tx['cats'][1]:
+            type_idx = st.radio(lbl['type'], range(len(tx['types_elec'])), format_func=lambda x: tx['types_elec'][x], horizontal=True)
+            sel_type = tx['types_elec'][type_idx]
+            user_inputs['Type'] = sel_type
+            user_inputs['Model'] = st.text_input(lbl['model'], value=data.get('name', ''))
+            
+            if type_idx == 0: # Mobil
+                c1, c2 = st.columns(2)
+                user_inputs['Storage'] = c1.text_input(lbl['store'])
+                user_inputs['Batt'] = c2.text_input(lbl['bat'])
+            elif type_idx == 1: # PC
+                c1, c2 = st.columns(2)
+                user_inputs['CPU'] = c1.text_input(lbl['cpu'])
+                user_inputs['RAM'] = c2.text_input(lbl['ram'])
+                c3, c4 = st.columns(2)
+                user_inputs['GPU'] = c3.text_input(lbl['gpu'])
+                user_inputs['Storage'] = c4.text_input(lbl['store'])
+
+            user_inputs['Accs'] = st.multiselect(lbl['acc'], tx['acc_opts'])
+
+        # 3. AUTO
+        elif cat == tx['cats'][2]:
+            user_inputs['Model'] = st.text_input(lbl['model'], value=data.get('name', ''))
+            c1, c2 = st.columns(2)
+            user_inputs['Year'] = c1.text_input(lbl['year'])
+            user_inputs['Km'] = c2.text_input(lbl['km'])
+            user_inputs['Specs'] = st.text_input(lbl['engine'], placeholder="2.0 TDI, Manual...")
+            user_inputs['Body'] = st.selectbox(lbl['body'], ["Sedan", "Combi", "SUV", "Hatchback", "Cabrio"])
+
+        # 4. NÁBYTEK
+        elif cat == tx['cats'][3]:
+            user_inputs['Dims'] = st.text_input(lbl['dims'])
+            user_inputs['Mat'] = st.text_input(lbl['mat'])
+
+        # KONTAKT
+        plat_name = data.get('platform', '')
+        no_contact = ["Vinted", "Vinted.de", "Vinted.pl", "Depop", "eBay", "eBay.de", "Etsy", "Allegro Lokalnie"]
+        if plat_name not in no_contact:
+            st.markdown("---")
+            user_inputs['Contact'] = st.text_input(lbl['loc'], placeholder="+420...")
+
+        user_inputs.update({'Name': name, 'Price': price, 'Cond': cond, 'Defects': defs})
+        style = st.selectbox("Styl", tx['style'])
+        
+        # GENERACE
+        if st.button(tx['gen'], type="primary"):
+            # ODEČTENÍ POKUSU (POKUD NENÍ PREMIUM)
+            if not is_premium:
+                update_trials(st.session_state.user_email, trials_left - 1)
+            
+            with st.spinner("..."):
+                ad = generate_ad_with_gpt(data, st.session_state.lang, plat_name, style, user_inputs)
+                st.session_state.final_text = ad
+                st.session_state.step = 3
+                st.rerun()
+
+    # --- KROK 3: VÝSLEDEK ---
+    elif st.session_state.step == 3:
+        st.balloons()
+        st.success("OK! 🎉")
+        st.text_area("Result:", value=st.session_state.final_text, height=450)
+        
+        c1, c2 = st.columns(2)
+        if c1.button(tx['back']): st.session_state.step = 0; st.session_state.cat = ""; st.rerun()
+        if not is_premium:
+            if c2.button("⭐ " + tx['buy']):
+                account_dialog()
