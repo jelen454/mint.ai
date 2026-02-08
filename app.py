@@ -8,7 +8,7 @@ import sqlite3
 import os
 from PIL import Image
 
-# Zkusíme importovat rembg, pokud není, nevadí
+# Zkusíme importovat rembg
 try:
     from rembg import remove
     HAS_REMBG = True
@@ -52,7 +52,6 @@ def get_user(email):
 def create_user(email):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
-    # Nový uživatel má 3 pokusy a není premium (0)
     c.execute("INSERT INTO users VALUES (?, 3, 0)", (email,))
     conn.commit()
     conn.close()
@@ -71,7 +70,6 @@ def set_premium(email):
     conn.commit()
     conn.close()
 
-# Inicializace DB při startu
 init_db()
 
 # Kontrola OpenAI
@@ -83,7 +81,7 @@ except ImportError:
     st.stop()
 
 # ==========================================
-# 2. DESIGN (GHOST MODE + CUSTOM MENU)
+# 2. DESIGN (GHOST MODE)
 # ==========================================
 st.markdown("""
 <style>
@@ -101,7 +99,7 @@ st.markdown("""
         text-shadow: 0px 1px 2px rgba(0,0,0,0.6);
     }
     
-    /* 3. SKRYTÍ VŠECH LIŠT (ABY TO BYLO PROFI) */
+    /* 3. SKRYTÍ VŠECH LIŠT */
     header {visibility: hidden !important;}
     footer {visibility: hidden !important;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
@@ -149,8 +147,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. GLOBALIZAČNÍ MATRIX (PŘEKLADY)
+# 3. LOGIKA A PŘEKLADY
 # ==========================================
+
+if 'user_email' not in st.session_state: st.session_state.user_email = None
+if 'lang' not in st.session_state: st.session_state.lang = "CZ"
+if 'step' not in st.session_state: st.session_state.step = 0
+if 'cat' not in st.session_state: st.session_state.cat = ""
+if 'ai_data' not in st.session_state: st.session_state.ai_data = {}
+
+# MAPOVÁNÍ JAZYKŮ PRO GPT (Aby to nehaprovalo)
+LANG_MAP = {
+    "CZ": "Czech",
+    "EN": "English",
+    "DE": "German",
+    "PL": "Polish"
+}
+
 TRANS = {
     "CZ": {
         "title": "INZO AI", "sub": "Tvůj prodejní expert", 
@@ -203,20 +216,65 @@ TRANS = {
         "conds_car": ["Used", "New / Demo", "Damaged", "For parts"],
         "conds_furn": ["Like new", "Used", "Damaged"],
         "login_t": "Login", "email_l": "Enter your email", "start": "Start App", "menu": "My Account", "buy": "Buy Unlimited", "rem": "Trials left:", "prem": "PREMIUM ACTIVE 💎", "key_l": "I have a key"
+    },
+    "DE": {
+        "title": "INZO AI", "sub": "Verkaufsexperte", 
+        "step0": "Was verkaufen wir?", "back": "Zurück",
+        "cats": ["Kleidung", "Elektronik", "Auto", "Möbel"],
+        "tab_cam": "📷 Kamera", "tab_upl": "📂 Datei", "upl_label": "Datei wählen",
+        "bg": "Hintergrund entfernen", "an": "🔍 Analysieren", "gen": "🚀 Erstellen",
+        "platforms": ["Kleinanzeigen", "Vinted.de", "eBay.de", "Facebook Marketplace"],
+        "lbls": {
+            "name": "Titel", "price": "Preis", "cond": "Zustand", "def": "Mängel", "loc": "📍 Ort / Kontakt",
+            "brand": "Marke", "size": "Größe", "mat": "Material", "col": "Farbe", "cut": "Schnitt", "des": "Design",
+            "type": "Typ", "model": "Modell", "store": "Speicher", "bat": "Batterie", "acc": "Zubehör",
+            "cpu": "Prozessor (CPU)", "ram": "RAM", "gpu": "Grafikkarte (GPU)",
+            "body": "Karosserie", "year": "Jahr", "km": "Km", "engine": "Motor / Kraftstoff",
+            "dims": "Maße"
+        },
+        "style": ["Verkaufsexperte", "Kurz", "Technisch"],
+        "buy_btn": "⭐ SCHLÜSSEL KAUFEN ($1.60)",
+        "limit_msg": "⛔ Testphase beendet! Kaufen Sie einen Schlüssel.",
+        "acc_opts": ["OVP", "Ladegerät", "Kabel", "Hülle", "Kopfhörer", "Garantie"],
+        "types_elec": ["Handy/Tablet", "PC/Laptop", "TV/Monitor", "Andere"],
+        "conds_cloth": ["Neu mit Etikett", "Sehr gut", "Gut", "Mängel"],
+        "conds_elec": ["Neu / OVP", "Gebraucht - Wie neu", "Gebraucht", "Defekt"],
+        "conds_car": ["Gebraucht", "Neu / Vorführwagen", "Unfallwagen", "Ersatzteile"],
+        "conds_furn": ["Wie neu", "Gebraucht", "Beschädigt"],
+        "login_t": "Anmeldung", "email_l": "E-Mail eingeben", "start": "Starten", "menu": "Mein Konto", "buy": "Kaufen", "rem": "Versuche übrig:", "prem": "PREMIUM AKTIV 💎", "key_l": "Ich habe einen Schlüssel"
+    },
+    "PL": {
+        "title": "INZO AI", "sub": "Ekspert sprzedaży", 
+        "step0": "Co sprzedajemy?", "back": "Wróć",
+        "cats": ["Ubrania", "Elektronika", "Samochody", "Meble"],
+        "tab_cam": "📷 Aparat", "tab_upl": "📂 Plik", "upl_label": "Wybierz plik",
+        "bg": "Usuń tło", "an": "🔍 Analizuj", "gen": "🚀 Generuj",
+        "platforms": ["OLX.pl", "Vinted.pl", "Allegro Lokalnie", "Facebook"],
+        "lbls": {
+            "name": "Tytuł", "price": "Cena", "cond": "Stan", "def": "Wady", "loc": "📍 Lokalizacja / Kontakt",
+            "brand": "Marka", "size": "Rozmiar", "mat": "Materiał", "col": "Kolor", "cut": "Krój", "des": "Design",
+            "type": "Typ", "model": "Model", "store": "Pamięć", "bat": "Bateria", "acc": "Akcesoria",
+            "cpu": "Procesor (CPU)", "ram": "RAM", "gpu": "Karta graficzna",
+            "body": "Nadwozie", "year": "Rok", "km": "Przebieg", "engine": "Silnik / Paliwo",
+            "dims": "Wymiary"
+        },
+        "style": ["Ekspert sprzedaży", "Krótki", "Techniczny"],
+        "buy_btn": "⭐ KUP KLUCZ ($1.60)",
+        "limit_msg": "⛔ Koniec wersji próbnej! Kup klucz.",
+        "acc_opts": ["Pudełko", "Ładowarka", "Kabel", "Etui", "Słuchawki", "Gwarancja"],
+        "types_elec": ["Telefon/Tablet", "Komputer/Laptop", "TV/Monitor", "Inne"],
+        "conds_cloth": ["Nowy z metką", "Bardzo dobry", "Dobry", "Z wadami"],
+        "conds_elec": ["Nowy / Zapakowany", "Używany - Jak nowy", "Używany", "Uszkodzony"],
+        "conds_car": ["Używany", "Nowy / Demo", "Uszkodzony", "Na części"],
+        "conds_furn": ["Jak nowy", "Używany", "Uszkodzony"],
+        "login_t": "Logowanie", "email_l": "Wpisz email", "start": "Rozpocznij", "menu": "Moje konto", "buy": "Kup bez limitu", "rem": "Pozostało prób:", "prem": "PREMIUM AKTYWNE 💎", "key_l": "Mam klucz"
     }
 }
-
-# Session state init
-if 'user_email' not in st.session_state: st.session_state.user_email = None
-if 'lang' not in st.session_state: st.session_state.lang = "CZ"
-if 'step' not in st.session_state: st.session_state.step = 0
-if 'cat' not in st.session_state: st.session_state.cat = ""
-if 'ai_data' not in st.session_state: st.session_state.ai_data = {}
 
 tx = TRANS[st.session_state.lang] if st.session_state.lang in TRANS else TRANS["CZ"]
 
 # ==========================================
-# 4. FUNKCE BACKENDU (VŠECHNO PŮVODNÍ ZDE)
+# 4. FUNKCE BACKENDU (S OPRAVOU JAZYKŮ)
 # ==========================================
 
 def verify_license(key):
@@ -235,11 +293,24 @@ def encode_image(image):
 def analyze_image_with_gpt(image, cat, lang):
     b64 = encode_image(image)
     instr = ""
+    # PŘÍSNĚJŠÍ PŘÍKAZ PRO JAZYK
+    full_lang = LANG_MAP.get(lang, "English")
+    
     if cat == tx['cats'][0]: instr = "Find: Brand, Size, Material, Color, Cut/Fit, Logo/Design."
     elif cat == tx['cats'][1]: instr = "Find: Type, Brand, Model, Condition details."
     elif cat == tx['cats'][2]: instr = "Find: Brand, Model, Body type, Year, Fuel."
     
-    prompt = f"Role: Sales Expert. Language: {lang}. Category: {cat}. Task: {instr}. IMPORTANT: Describe everything in {lang} language only. Translate specific terms like T-shirt to {lang}. Output JSON: {{'name': '...', 'price_estimate': '...', 'details': {{'Key': 'Value'}}}}"
+    # UPRAVENÝ PROMPT - VYNUCUJE JAZYK
+    prompt = f"""
+    Role: Sales Expert. 
+    TASK: Analyze image. Category: {cat}. Detail Instructions: {instr}.
+    
+    IMPORTANT LANGUAGE RULE: Output ONLY in {full_lang} language. 
+    Translate all materials, colors, and types into {full_lang}.
+    Do NOT use English unless it is a proper Brand Name.
+    
+    Output JSON: {{'name': '...', 'price_estimate': '...', 'details': {{'Key': 'Value'}}}}
+    """
     
     try:
         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]}])
@@ -251,6 +322,9 @@ def generate_ad_with_gpt(data, lang, platform, style, user_inputs):
     clean_inputs = {k: v for k, v in user_inputs.items() if v and str(v).strip() != "" and v != []}
     final_data.update(clean_inputs)
     
+    # PŘÍSNĚJŠÍ PŘÍKAZ PRO JAZYK
+    full_lang = LANG_MAP.get(lang, "English")
+    
     contact_logic = ""
     no_contact_plats = ["Vinted", "Vinted.de", "Vinted.pl", "Depop", "eBay", "eBay.de", "Etsy", "Allegro Lokalnie"]
     
@@ -260,12 +334,21 @@ def generate_ad_with_gpt(data, lang, platform, style, user_inputs):
         contact_logic = "IMPORTANT: Include the location and contact info at the end."
 
     prompt = f"""
-    Write a sales ad. Platform: {platform}. Language: {lang}. Style: {style}.
+    Write a high-converting sales ad.
+    Platform: {platform}. 
+    Style: {style}.
+    
+    CRITICAL INSTRUCTION: WRITE THE ENTIRE AD IN {full_lang} LANGUAGE.
+    If the input data is in English, TRANSLATE it to {full_lang}.
+    Do not mix languages.
+    
     Product Data: {json.dumps(final_data, ensure_ascii=False)}
-    Instructions:
-    1. {contact_logic}
-    2. Use emojis and hashtags.
-    3. Be persuasive.
+    
+    Structure:
+    1. Catchy Title (in {full_lang})
+    2. Description (in {full_lang})
+    3. {contact_logic}
+    4. Use emojis and hashtags relevant to {full_lang}.
     """
     try:
         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
@@ -352,12 +435,12 @@ else:
 
     # --- PŮVODNÍ APLIKACE (KROK 0-3) ---
     
-    # --- JAZYKOVÁ LIŠTA (UVNITŘ) ---
+    # --- JAZYKOVÁ LIŠTA (UVNITŘ APLIKACE) ---
     cols = st.columns(4)
-    if cols[0].button("🇨🇿 Česky", key="l1"): st.session_state.lang = "CZ"; st.rerun()
-    if cols[1].button("🇬🇧 English", key="l2"): st.session_state.lang = "EN"; st.rerun()
-    if cols[2].button("🇩🇪 Deutsch", key="l3"): st.session_state.lang = "DE"; st.rerun()
-    if cols[3].button("🇵🇱 Polski", key="l4"): st.session_state.lang = "PL"; st.rerun()
+    if cols[0].button("🇨🇿 Česky", key="lx1"): st.session_state.lang = "CZ"; st.rerun()
+    if cols[1].button("🇬🇧 English", key="lx2"): st.session_state.lang = "EN"; st.rerun()
+    if cols[2].button("🇩🇪 Deutsch", key="lx3"): st.session_state.lang = "DE"; st.rerun()
+    if cols[3].button("🇵🇱 Polski", key="lx4"): st.session_state.lang = "PL"; st.rerun()
     
     st.markdown(f"*{tx['sub']}*")
 
